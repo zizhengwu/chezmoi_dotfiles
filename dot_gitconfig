@@ -1,0 +1,32 @@
+[user]
+	name = Zizheng Wu
+	email = me@zizhengwu.com
+[core]
+	autocrlf = true
+	excludesfile =
+	pager = delta
+[difftool "sourcetree"]
+	cmd = 'C:/Program Files/Beyond Compare 4/BComp.exe' \"$LOCAL\" \"$REMOTE\"
+[mergetool "sourcetree"]
+	cmd = 'C:/Program Files/Beyond Compare 4/BComp.exe' \"$LOCAL\" \"$REMOTE\" \"$BASE\" -o \"$MERGED\"
+	trustExitCode = true
+[gui]
+	recentrepo = C:/Users/zizheng/git/MuteActiveWindow
+[gc]
+	autoDetach = false
+[http]
+	cookiefile = C:\\Users\\zizheng\\.gitcookies
+	proxy = http://127.0.0.1:7890
+[diff]
+	tool = bc
+[difftool "bc"]
+	path = C:\\Users\\zizheng\\scoop\\apps\\beyondcompare\\current\\BComp.exe
+[merge]
+	tool = bc
+	conflictStyle = zdiff3
+[mergetool "bc"]
+	path = C:\\Users\\zizheng\\scoop\\apps\\beyondcompare\\current\\BComp.exe
+[interactive]
+	diffFilter = delta --color-only
+[delta]
+	navigate = true
