@@ -1,0 +1,21 @@
+# Allow zsh to work with build/envsetup.sh
+setopt +o nomatch
+
+# Enable auto-completion for `lunch` on zsh
+autoload bashcompinit
+bashcompinit
+
+# MacOS Devtools Proxy
+[[ -e /Users/zizhengwu/mdproxy/data/mdproxy_zshrc ]] && source /Users/zizhengwu/mdproxy/data/mdproxy_zshrc # MDPROXY-ZSHRC
+export MDPROXY_EXTRA_MOUNTS="/google/data"
+
+# VSCode
+export PATH="/Applications/Visual Studio Code.app/Contents/Resources/app/bin":$PATH
+
+# google-cloud-sdk
+if command -v brew >/dev/null 2>&1; then
+  google_cloud_sdk_prefix="$(brew --prefix)/share/google-cloud-sdk"
+  [[ -r "$google_cloud_sdk_prefix/path.zsh.inc" ]] && source "$google_cloud_sdk_prefix/path.zsh.inc"
+  [[ -r "$google_cloud_sdk_prefix/completion.zsh.inc" ]] && source "$google_cloud_sdk_prefix/completion.zsh.inc"
+  unset google_cloud_sdk_prefix
+fi

@@ -1,0 +1,64 @@
+# google internal tools
+[[ -r /etc/bash_completion.d/g4d ]] && source /etc/bash_completion.d/g4d
+alias shell_cf='/google/bin/releases/buildqueue/tools/regression/shell_cf.par'
+alias plxutil=/google/data/ro/teams/plx/plxutil
+alias fixjs=/google/src/components/head/google3/third_party/java_src/jscomp/java/com/google/javascript/jscomp/lint/fixjs.sh
+alias intellij-ue-stable='nohup /opt/intellij-ue-stable/bin/idea.sh >> /dev/null 2>&1&'
+alias intellij-ue-beta='nohup /opt/intellij-ue-beta/bin/idea.sh >> /dev/null 2>&1&'
+alias smartgit='nohup /usr/share/smartgit/bin/smartgit.sh >> /dev/null 2>&1&'
+alias rpcreplay=/google/data/ro/teams/frameworks-test-team/rpcreplay-cli/live/rpcreplay
+alias jadep='/google/data/ro/teams/jade/jadep'
+alias bequt='/auto/buildstatic/projects/bequt/bequt.sh'
+alias get_mint="/google/data/ro/projects/gaiamint/bin/get_mint"
+alias devsite="/google/data/ro/projects/devsite/devsite"
+alias buildfix='/google/data/ro/teams/ads-integrity/buildfix'
+alias cclean='/google/src/head/depot/google3/devtools/maintenance/cclean/cclean'
+alias polyjuice='/google/bin/releases/internetto/tools/polyjuice/polyjuice'
+alias apido=/google/data/ro/teams/oneplatform/apido
+alias cuskyctl=/google/bin/releases/cloud-kernel-team/cusky/cuskyctl
+alias terraform="/google/data/ro/teams/terraform/bin/terraform"
+alias bacon=/google/bin/releases/acq-netops/oob/bin/bacon
+alias pancetta="/google/bin/releases/bandaid-team/pancetta_par/pancetta.par"
+alias batool=/google/data/ro/projects/bandaid/batool
+alias bandaidcfg=/google/data/ro/projects/bandaid/bandaidcfg
+alias safergcp=/google/bin/releases/safer-gcp/tools/safergcp
+alias edgeconctl=/google/bin/releases/cloud-kubernetes-edge-team/edgeconctl/edgeconctl
+alias slm=/google/data/ro/teams/cloud-ssa/common/slm
+alias centiutil=/google/data/ro/teams/centigrate/centiutil/centiutil
+## Hi
+[[ -r /etc/bash.bashrc.d/shell_history_forwarder.sh ]] && source /etc/bash.bashrc.d/shell_history_forwarder.sh
+
+# autojump
+[[ -s /usr/local/google/home/zizhengwu/.autojump/etc/profile.d/autojump.sh ]] && source /usr/local/google/home/zizhengwu/.autojump/etc/profile.d/autojump.sh
+autoload -U compinit && compinit -u
+
+## Beyond Compare
+export G4MULTIDIFF=1 # All diffs simultaneously
+export P4DIFF=$HOME/bin/p4bcdiff.sh
+export P4MERGE=$HOME/bin/p4bcmerge.sh
+
+# no lottery
+export BOQ_CANARY=NO
+
+# fun
+# prodcertstatus -q &&
+#   /google/data/ro/users/di/diamondm/engfortunes/fortune.sh
+
+# PATH
+PATH=$PATH:/usr/lib/google-golang/bin
+
+# kubectl
+if command -v kubectl >/dev/null 2>&1; then
+  source <(kubectl completion zsh)
+fi
+
+export COS_ROOT=$HOME/cos
+cos_repo() {
+  if
+    [[ $PWD =~ '^(/usr/local/google/home/zizhengwu/cos[^/]*)$' && -d $HOME/depot_tools ]]
+  then
+    export COS_ROOT="$match[1]"
+    export PATH=$HOME/depot_tools:"$PATH"
+  fi
+}
+chpwd_functions+=(cos_repo)

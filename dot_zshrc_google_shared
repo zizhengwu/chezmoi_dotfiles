@@ -1,0 +1,56 @@
+# google internal tools
+alias irabbit='iblaze --iblaze_blaze_binary rabbit'
+alias atlssh="sshuttle --no-latency-control --ns-hosts 127.0.0.1 -r gpc@s17.ceplabs.dev -x s17.ceplabs.dev 21.64.0.0/19 10.128.0.0/13 10.136.0.0/13 10.144.0.0/20 10.248.0.0/16 10.249.0/16 10.250.0.0/16 10.251.0.0/16 10.252.0.0/16 10.253.0.0/16 10.254.32.0/19"
+
+# config
+export MY_TERMINAL_SPACE_IS_MORE_VALUABLE_THAN_YOUR_CREATIVE_EXPRESSION=1
+
+# g4 nightmare
+## Perforce
+export P4CONFIG=.p4config
+export P4EDITOR=$EDITOR
+cl_num() {
+  p4 -F'%change%' changes -s pending -c "$(p4 -F'%clientName%' info)"
+}
+
+## presubmit
+g4p() {
+  clientdir="$(g4 -ztag -F"%client%" describe -c $1)"
+  nohup g4 -c ${clientdir} presubmit --ignore_presubmit_errors >/dev/null 2>&1 &
+}
+
+hgforget() {
+  hg cls-setnumber --remove -c $1 && hg prune $1
+}
+
+# Anthos bare metal
+# export GOOGLE_APPLICATION_CREDENTIALS="$HOME/Documents/baremetal-zizhengwu/gcr.json"
+export KEEP_CLUSTER_IN_E2E_TEST=true
+export TEST_UPGRADE_IN_E2E_TEST=false
+gcloudssh() {
+  gcloud compute ssh "$1" --zone us-central1-a -- -o 'ProxyCommand=corp-ssh-helper %h %p'
+}
+gauth() {
+  gcert
+  gcloud auth print-access-token
+  gsutil cp gs://anthos-baremetal-staging/cni-plugins/v0.8.7-gke.0/cni-plugins-linux-amd64-v0.8.7-gke.0.tgz /tmp
+  gsutil cp gs://gdce-infra-devtest/rocky-upstream-rpms/sudo-1.9.15-6.el9.x86_64.rpm /tmp
+}
+gdce_export() {
+  export LOCATION=us-west1
+  export PROJECT=gdce-dev-zizhengwu
+  export GMEC_ABM_SANDBOX_PROJECT=gmec-abm-sandbox-1
+  export CLUSTER=zizhengwu-cluster-1
+  export NODEPOOL=zizhengwu-nodepool-1
+  export NODEPOOL_LOCATION=us-west1-edge-zizhengwu-custom-0
+  export NODE_COUNT=3
+  export OPERATION_ID=operation-1694141794169-604d01fd733e1-ed0778ee-7f5a905e
+  export EDGESITE_PROJECT=edgesites-gce-autopush
+  export MACHINE_0=zizhengwu-custom-0-instance-0-zw07
+  export MACHINE_1=zizhengwu-custom-0-instance-1-m5fl
+  export MACHINE_2=zizhengwu-custom-0-instance-2-70rf
+  export ZONE_0=us-west1-c
+  export ZONE_1=us-west1-a
+  export ZONE_2=us-west1-b
+}
+gdce_export

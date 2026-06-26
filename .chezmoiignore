@@ -2,3 +2,8 @@
 Documents/**
 scoop/**
 {{ end }}
+
+{{ if ne .chezmoi.os "linux" }}
+.p10k.zsh
+.zsh*
+{{ end }}
