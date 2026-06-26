@@ -2,16 +2,17 @@
 	name = Zizheng Wu
 	email = me@zizhengwu.com
 [core]
-	autocrlf = true
 	excludesfile =
 	pager = delta
-[difftool "sourcetree"]
-	cmd = 'C:/Program Files/Beyond Compare 4/BComp.exe' \"$LOCAL\" \"$REMOTE\"
-[mergetool "sourcetree"]
-	cmd = 'C:/Program Files/Beyond Compare 4/BComp.exe' \"$LOCAL\" \"$REMOTE\" \"$BASE\" -o \"$MERGED\"
-	trustExitCode = true
-[gui]
-	recentrepo = C:/Users/zizheng/git/MuteActiveWindow
+[merge]
+	conflictStyle = zdiff3
+[interactive]
+	diffFilter = delta --color-only
+[delta]
+	navigate = true
+{{- if eq .chezmoi.os "windows" }}
+[core]
+	autocrlf = true
 [gc]
 	autoDetach = false
 [http]
@@ -23,10 +24,6 @@
 	path = C:\\Users\\zizheng\\scoop\\apps\\beyondcompare\\current\\BComp.exe
 [merge]
 	tool = bc
-	conflictStyle = zdiff3
 [mergetool "bc"]
 	path = C:\\Users\\zizheng\\scoop\\apps\\beyondcompare\\current\\BComp.exe
-[interactive]
-	diffFilter = delta --color-only
-[delta]
-	navigate = true
+{{- end }}
