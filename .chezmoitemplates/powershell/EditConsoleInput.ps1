@@ -1,6 +1,6 @@
 #---------------------------------------------------------------------------------------------------------------
 # https://gist.github.com/zett42/6a602120c253a86e4eebe35fcd53752f
-# Defines keyboard shortcut Alt+E for the console to edit current input in VSCode
+# Defines keyboard shortcut for the console to edit current input in VSCode
 # (edit the line that starts with "code" to use another editor).
 #
 # This code is an extension of this StackOverflow answer:
@@ -21,122 +21,146 @@
 # https://stackoverflow.com/a/71181105/7571258
 #---------------------------------------------------------------------------------------------------------------
 
+$SublimeCommand = "subl"
+
 function ConvertTo-LineAndChar {
     <#
     .SYNOPSIS
-        Convert cursor position (offset) to line number and character index 
-    #>    
+        Convert cursor position offset to line number and character index.
+        This is only used to open Sublime at the current console cursor position.
+    #>
     [CmdletBinding()]
     param(
-        [Parameter()] [string[]] $lines, 
-        [Parameter(Mandatory)] [int] $cursorPos     
+        [Parameter()] [string[]] $Lines,
+        [Parameter(Mandatory)] [int] $CursorPos
     )
 
-    if( $lines ) {
-        $pos = $nextPos = 0
+    if ($Lines) {
+        $pos = 0
 
-        for( $i = 0; $i -lt $lines.Count; $i++ ){ 
+        for ($i = 0; $i -lt $Lines.Count; $i++) {
+            $nextPos = $pos + $Lines[$i].Length + 1
 
-            $nextPos = $pos + $lines[ $i ].Length + 1
-            
-            if( $nextPos -gt $cursorPos ) {
-                return [PSCustomObject]@{ line = $i; char = $cursorPos - $pos }
+            if ($nextPos -gt $CursorPos) {
+                return [PSCustomObject]@{
+                    line = $i
+                    char = $CursorPos - $pos
+                }
             }
-            
+
             $pos = $nextPos
         }
     }
 
-    [PSCustomObject]@{ line = 0; char = 0 }  # default output
+    [PSCustomObject]@{
+        line = 0
+        char = 0
+    }
 }
 
-#---------------------------------------------------------------------------------------
-
-function ConvertTo-CursorPos {
-    <#
-    .SYNOPSIS
-        Convert line and char index to cursor position (offset) 
-    #>
-    [CmdletBinding()]
-    param (
-        [Parameter()] [string[]] $lines, 
-        [Parameter(Mandatory)] [int] $nLine,     
-        [Parameter(Mandatory)] [int] $nChar    
+function Split-LF {
+    param(
+        [Parameter()] [AllowNull()] [string] $Text
     )
 
-    if( -not $lines ) {
-        return 0
+    if ($null -eq $Text) {
+        return @("")
     }
 
-    $nLine = [Math]::Min( $nLine, $lines.Count - 1 )
-    $pos = 0
-
-    for( $i = 0; $i -lt $nLine; $i++ ){     
-        $pos += $lines[ $i ].Length + 1
-    }
-
-    # Output
-    $pos + [Math]::Min( $nChar, $lines[ $nLine ].Length )
+    @($Text -split "`n")
 }
 
-#---------------------------------------------------------------------------------------
-# Define keyboard shortcut Ctrl+x,Ctrl+e to edit the current console line in VSCode
-
 Set-PSReadLineKeyHandler -Chord 'Ctrl+x,Ctrl+e','Ctrl+x,e' -ScriptBlock {
-
     $currentInput = $null
     [int] $cursorPos = 0
 
-    # Copy current command-line input and get cursor position
-    [Microsoft.PowerShell.PSConsoleReadLine]::GetBufferState([ref] $currentInput, [ref] $cursorPos)
+    # Copy current command-line input and get cursor position.
+    [Microsoft.PowerShell.PSConsoleReadLine]::GetBufferState(
+        [ref] $currentInput,
+        [ref] $cursorPos
+    )
 
-    # Save current command-line to temp file
+    # Save current command-line input to a temp file.
     $tempFileName = "ps_$PID.ps1"
     $tempFilePath = Join-Path ([IO.Path]::GetTempPath()) $tempFileName
-    Set-Content $tempFilePath -Value $currentInput -Encoding utf8
 
-    # Convert cursor position to line and char index 
-    $currentInputLines = @($currentInput -split '\r?\n')
-    $goto = ConvertTo-LineAndChar -lines $currentInputLines -cursorPos $cursorPos
+    try {
+        # Write raw UTF-8 without adding an extra newline.
+        $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+        [System.IO.File]::WriteAllText($tempFilePath, $currentInput, $utf8NoBom)
 
-    # Show a message to remind the user why this console is currently blocked
-    Write-Progress -Activity 'External editing in progress' -Status "Close VSCode ($tempFileName) to continue working in this console" -PercentComplete -1
+        # Convert original console cursor position to line/column for Sublime.
+        # This is only used when opening Sublime.
+        $currentInputLines = Split-LF $currentInput
+        $goto = ConvertTo-LineAndChar -Lines $currentInputLines -CursorPos $cursorPos
 
-    # Edit the command using VSCode (passing the cursor position to the editor) 
-    code --new-window --wait --goto "${tempFilePath}:$($goto.line + 1):$($goto.char + 1)"
+        Write-Progress `
+            -Activity 'External editing in progress' `
+            -Status "Save and close Sublime Text file ($tempFileName) to continue working in this console" `
+            -PercentComplete -1
 
-    # Remove the message
-    Write-Progress -Activity 'External editing in progress' -Completed
+        # Sublime uses file:line:column syntax.
+        # PSReadLine uses zero-based line/char internally; Sublime uses one-based line/column.
+        $sublimeTarget = "${tempFilePath}:$($goto.line + 1):$($goto.char + 1)"
 
-    # Get the edited input as individual lines
-    $editedInputLines = Get-Content -LiteralPath $tempFilePath -Encoding utf8 
+        # Open in a new Sublime window and wait until the file is closed.
+        & $SublimeCommand -n -w -- $sublimeTarget
 
-    # Cleanup
-    Remove-Item $tempFilePath
+        Write-Progress -Activity 'External editing in progress' -Completed
 
-    # The console always uses LF character as line separator, regardless of platform. 
-    $editedInput = ($editedInputLines -join "`n").Trim()
+        # Read raw text back exactly.
+        $editedInput = [System.IO.File]::ReadAllText(
+            $tempFilePath,
+            [System.Text.Encoding]::UTF8
+        )
 
-    # Replace current console line with the content of the temp file
-    [Microsoft.PowerShell.PSConsoleReadLine]::Replace(0, $currentInput.Length, $editedInput)
+        # Normalize line endings for PSReadLine.
+        $editedInput = $editedInput -replace "`r`n", "`n" -replace "`r", "`n"
 
-    # Try to restore cursor position (if text hasn't changed too much)
-    $cursorPos = ConvertTo-CursorPos -lines $editedInputLines -nLine $goto.line -nChar $goto.char 
-    [Microsoft.PowerShell.PSConsoleReadLine]::SetCursorPosition( $cursorPos )
+        # Do NOT use .Trim(); it can remove meaningful whitespace.
+        # Remove only final newline characters that editors may add automatically.
+        $editedInput = $editedInput.TrimEnd([char[]]@("`r", "`n"))
 
-    # Bring console window to foreground again
-    if( $env:OS -eq 'Windows_NT' ) {   
-        (New-Object -ComObject WScript.Shell).AppActivate( $PID ) 
-    } 
-    elseif( $IsMacOS ) {   
-        $terminalAppName = $env:TERM_PROGRAM  
-        if( $terminalAppName -eq 'Apple_Terminal' ) { 
-            $terminalAppName = 'Terminal.app' 
-        }
-        $PSNativeCommandArgumentPassing = 'Legacy'   
-        osascript -e "tell application \""$terminalAppName\"" to activate" 2>$null 
+        # Replace current console input with edited content.
+        [Microsoft.PowerShell.PSConsoleReadLine]::Replace(
+            0,
+            $currentInput.Length,
+            $editedInput
+        )
+
+        # Important:
+        # Do NOT call SetCursorPosition here.
+        # Let PSReadLine handle the cursor after Replace().
+    }
+    finally {
+        Write-Progress -Activity 'External editing in progress' -Completed
+        Remove-Item -LiteralPath $tempFilePath -ErrorAction SilentlyContinue
     }
 
-    # Uncomment this to automatically press "Enter" key in the console after editing.
-    #[Microsoft.PowerShell.PSConsoleReadLine]::AcceptLine()
+    # Bring console window to foreground again.
+    if ($env:OS -eq 'Windows_NT') {
+        try {
+            (New-Object -ComObject WScript.Shell).AppActivate($PID) | Out-Null
+        } catch {
+            # Ignore focus errors.
+        }
+    }
+    elseif ($IsMacOS) {
+        $terminalAppName = $env:TERM_PROGRAM
+
+        if ($terminalAppName -eq 'Apple_Terminal') {
+            $terminalAppName = 'Terminal.app'
+        }
+
+        $oldArgumentPassing = $PSNativeCommandArgumentPassing
+        try {
+            $PSNativeCommandArgumentPassing = 'Legacy'
+            osascript -e "tell application `"$terminalAppName`" to activate" 2>$null
+        } finally {
+            $PSNativeCommandArgumentPassing = $oldArgumentPassing
+        }
+    }
+
+    # Uncomment this to automatically press Enter after editing.
+    # [Microsoft.PowerShell.PSConsoleReadLine]::AcceptLine()
 }
