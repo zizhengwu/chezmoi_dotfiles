@@ -13,8 +13,6 @@
 {{- if eq .chezmoi.os "windows" }}
 [core]
 	autocrlf = true
-[gc]
-	autoDetach = false
 [http]
 	cookiefile = C:\\Users\\zizheng\\.gitcookies
 	proxy = http://127.0.0.1:7890
@@ -26,4 +24,8 @@
 	tool = bc
 [mergetool "bc"]
 	path = C:\\Users\\zizheng\\scoop\\apps\\beyondcompare\\current\\BComp.exe
+{{- end }}
+{{- if eq .chezmoi.os "linux" }}
+[http]
+	proxy = http://192.168.50.200:7890
 {{- end }}
