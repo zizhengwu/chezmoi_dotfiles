@@ -13,9 +13,6 @@
 {{- if eq .chezmoi.os "windows" }}
 [core]
 	autocrlf = true
-[http]
-	cookiefile = C:\\Users\\zizheng\\.gitcookies
-	proxy = http://127.0.0.1:7890
 [diff]
 	tool = bc
 [difftool "bc"]
@@ -25,7 +22,7 @@
 [mergetool "bc"]
 	path = C:\\Users\\zizheng\\scoop\\apps\\beyondcompare\\current\\BComp.exe
 {{- end }}
-{{- if eq .chezmoi.os "linux" }}
+{{- if and (eq .chezmoi.os "linux") (not (hasPrefix "oracle" .chezmoi.hostname)) }}
 [http]
-	proxy = http://192.168.50.200:7890
+	proxy = http://192.168.50.200:7891
 {{- end }}
