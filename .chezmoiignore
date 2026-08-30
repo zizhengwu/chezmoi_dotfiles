@@ -7,3 +7,8 @@ scoop/**
 .p10k.zsh
 .zsh*
 {{ end }}
+
+{{ if eq .chezmoi.os "windows" }}
+.tmux.conf
+.config/nvim/**
+{{ end }}
