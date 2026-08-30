@@ -22,4 +22,15 @@ config.color_scheme = scheme_for_appearance(get_appearance())
 
 config.default_prog = { 'pwsh.exe', '-NoLogo' }
 
+config.launch_menu = {
+  {
+    label = 'SSH: oracle0_proxy',
+    args = { 'ssh.exe', 'oracle0_proxy' },
+  },  
+  {
+    label = 'SSH: oracle1_proxy',
+    args = { 'ssh.exe', 'oracle1_proxy' },
+  },
+}
+
 return config
