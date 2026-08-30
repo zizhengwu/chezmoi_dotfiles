@@ -22,6 +22,8 @@ config.color_scheme = scheme_for_appearance(get_appearance())
 
 config.default_prog = { 'pwsh.exe', '-NoLogo' }
 
+config.enable_kitty_keyboard = true
+
 config.launch_menu = {
   {
     label = 'SSH: oracle0_proxy',
