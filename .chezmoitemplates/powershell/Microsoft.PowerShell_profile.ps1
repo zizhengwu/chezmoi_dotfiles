@@ -52,4 +52,5 @@ if (Test-Path($ChocolateyProfile)) {
 
 $profileDir = Split-Path -Parent $PSCommandPath
 . (Join-Path $profileDir 'EditConsoleInput.ps1')
+. (Join-Path $profileDir 'Restream.ps1')
 Invoke-Expression (& { (zoxide init powershell | Out-String) })
