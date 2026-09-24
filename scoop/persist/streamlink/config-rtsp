@@ -1,0 +1,21 @@
+# Shared source settings for restream -> FFmpeg -> MediaMTX.
+# No player/player-args: every viewer chooses its own player.
+# restream-buffer-seconds=30
+# The restream wrapper waits after the first media byte, then publishes at 1x.
+# Streamlink fills the ring buffer during that wait. Applies to HLS and HTTP/FLV.
+http-proxy=socks5h://127.0.0.1:7891
+# The shared publisher buffer supplies the delay; do not add an HLS-only rewind.
+hls-start-offset=0
+retry-streams=5
+retry-max=60
+retry-open=5
+stream-segment-attempts=60
+stream-segment-timeout=5
+hls-playlist-reload-time=5
+hls-playlist-reload-attempts=60
+stream-timeout=300
+stream-segmented-queue-deadline=0
+http-timeout=10
+# Capacity for the shared buffer: 128 MiB holds 30 seconds at up to ~35 Mbit/s.
+# Increase this if using a longer delay or a higher-bitrate source.
+ringbuffer-size=128M

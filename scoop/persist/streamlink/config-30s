@@ -1,0 +1,16 @@
+player=mpv
+default-stream=best
+http-proxy=http://127.0.0.1:7891
+player-args=--profile=stream-30s
+hls-start-offset=60
+retry-streams=5
+retry-max=60
+retry-open=5
+stream-segment-attempts=60
+stream-segment-timeout=5
+hls-playlist-reload-time=5
+hls-playlist-reload-attempts=60
+stream-timeout=300
+stream-segmented-queue-deadline=0
+http-timeout=10
+ringbuffer-size=128M
