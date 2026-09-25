@@ -65,6 +65,8 @@ function restream {
             $null = $sink.Start()
             $sinkErrors = $sink.StandardError.BaseStream.CopyToAsync($sinkLog)
             $sink.StandardInput.BaseStream.WriteByte([byte]$firstByte)
+            # Flush the saved header byte before the asynchronous bulk copy.
+            $sink.StandardInput.BaseStream.Flush()
             $null = $source.StandardOutput.BaseStream.CopyToAsync($sink.StandardInput.BaseStream).GetAwaiter().GetResult()
             $sink.StandardInput.Close()
             $source.WaitForExit()
