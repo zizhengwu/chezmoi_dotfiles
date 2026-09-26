@@ -4,6 +4,7 @@
 [core]
 	excludesfile =
 	pager = delta
+	autocrlf = input
 [merge]
 	conflictStyle = zdiff3
 [interactive]
@@ -11,8 +12,6 @@
 [delta]
 	navigate = true
 {{- if eq .chezmoi.os "windows" }}
-[core]
-	autocrlf = true
 [diff]
 	tool = bc
 [difftool "bc"]
