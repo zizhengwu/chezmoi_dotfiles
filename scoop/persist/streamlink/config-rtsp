@@ -4,6 +4,7 @@
 # The restream wrapper waits after the first media byte, then publishes at 1x.
 # Streamlink fills the ring buffer during that wait. Applies to HLS and HTTP/FLV.
 http-proxy=socks5h://127.0.0.1:7891
+http-ignore-env
 # The shared publisher buffer supplies the delay; do not add an HLS-only rewind.
 hls-start-offset=0
 retry-streams=5
