@@ -5,6 +5,7 @@ Set-PSReadLineKeyHandler -Key Ctrl+Shift+v -Function Paste
 Set-PSReadLineKeyHandler -Key Ctrl+w -Function BackwardKillWord
 Set-PSReadlineKeyHandler -Key Tab -Function MenuComplete
 Set-PSReadLineKeyHandler -Chord Ctrl+/ -Function Undo -ErrorAction Stop
+Set-PSReadLineKeyHandler -Chord 'Ctrl+?' -Function Redo -ErrorAction Stop
 atuin init powershell --disable-up-arrow | Out-String | Invoke-Expression
 # zsh-ish: HIST_FIND_NO_DUPS
 Set-PSReadLineOption -HistoryNoDuplicates
