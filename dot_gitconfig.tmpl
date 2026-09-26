@@ -21,6 +21,10 @@
 [mergetool "bc"]
 	path = C:\\Users\\zizheng\\scoop\\apps\\beyondcompare\\current\\BComp.exe
 {{- end }}
+{{- if and (eq .chezmoi.os "windows") (eq .chezmoi.hostname "ZIZHENG-DESKTOP") }}
+[http]
+	proxy = http://127.0.0.1:7891
+{{- end }}
 {{- if and (eq .chezmoi.os "linux") (not (hasPrefix "oracle" .chezmoi.hostname)) }}
 [http]
 	proxy = http://192.168.50.200:7891
