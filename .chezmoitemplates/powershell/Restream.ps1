@@ -11,9 +11,6 @@ function restream {
 
     # Shared source buffering/retry settings, independent of the viewing player.
     $streamlinkConfig = Join-Path $HOME 'scoop/persist/streamlink/config-rtsp'
-    $bufferSetting = Select-String -LiteralPath $streamlinkConfig -Pattern '^# restream-buffer-seconds=(\d+)\s*$' -ErrorAction Stop
-    if (-not $bufferSetting) { throw "Missing restream-buffer-seconds in $streamlinkConfig" }
-    $bufferSeconds = [int]$bufferSetting.Matches[0].Groups[1].Value
 
     $config = "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\bluenviron.mediamtx_Microsoft.Winget.Source_8wekyb3d8bbwe\mediamtx.yml"
 
@@ -26,10 +23,39 @@ function restream {
         Start-Sleep -Milliseconds 700
     }
 
-    # Runs in a detached PowerShell process; keep media as bytes throughout.
+    # Runs in a background PowerShell process sharing the console; keep media as bytes.
     $publish = {
-        param($streamUrl, $quality, $streamlinkConfig, $bufferSeconds, $site, $rtspUrl, $logFile, $streamlinkLog)
+        param($streamUrl, $quality, $streamlinkConfig, $offsetConfig, $site, $rtspUrl, $logFile, $streamlinkLog)
         $ErrorActionPreference = 'Stop'
+        # Use .NET tasks: PowerShell callbacks on IO threads have no runspace.
+        Add-Type -TypeDefinition @'
+using System;
+using System.IO;
+using System.Threading.Tasks;
+
+public static class RestreamLogTee
+{
+    public static async Task CopyAsync(Stream input, Stream log, Stream console)
+    {
+        var buffer = new byte[4096];
+        int count;
+        while ((count = await input.ReadAsync(buffer, 0, buffer.Length)) != 0)
+        {
+            await log.WriteAsync(buffer, 0, count);
+            await log.FlushAsync();
+            if (console == null) continue;
+            try
+            {
+                await console.WriteAsync(buffer, 0, count);
+                await console.FlushAsync();
+            }
+            catch (IOException) { console = null; }
+            catch (ObjectDisposedException) { console = null; }
+        }
+    }
+}
+'@
+        $consoleError = [Console]::OpenStandardError()
         $source = [Diagnostics.Process]::new()
         $sink = [Diagnostics.Process]::new()
         $sourceLog = [IO.FileStream]::new($streamlinkLog, 'Append', 'Write', 'ReadWrite', 1)
@@ -47,23 +73,24 @@ function restream {
             foreach ($argument in @($streamUrl, $quality, '--config', $streamlinkConfig, '--stdout')) {
                 $source.StartInfo.ArgumentList.Add($argument)
             }
+            if ($offsetConfig) {
+                $source.StartInfo.ArgumentList.Add('--config')
+                $source.StartInfo.ArgumentList.Add($offsetConfig)
+            }
             $codecArguments = if ($site -eq 'youtube') { @('-c:v', 'copy', '-c:a', 'aac', '-b:a', '160k', '-flags:a', '+global_header') } else { @('-c', 'copy') }
             foreach ($argument in (@('-nostdin', '-hide_banner', '-loglevel', 'warning', '-readrate', '1', '-readrate_initial_burst', '0', '-readrate_catchup', '1', '-i', 'pipe:0', '-map', '0:v:0', '-map', '0:a:0') + $codecArguments + @('-rtsp_transport', 'tcp', '-f', 'rtsp', $rtspUrl))) {
                 $sink.StartInfo.ArgumentList.Add($argument)
             }
             $null = $source.Start()
-            $sourceErrors = $source.StandardError.BaseStream.CopyToAsync($sourceLog)
-            # Start the delay only after actual media arrives. While stdout is blocked,
-            # Streamlink's download thread continues filling its bounded ring buffer.
+            $sourceErrors = [RestreamLogTee]::CopyAsync($source.StandardError.BaseStream, $sourceLog, $consoleError)
+            # Publish as soon as media arrives; Streamlink owns the HLS offset.
             $firstByte = $source.StandardOutput.BaseStream.ReadByte()
             if ($firstByte -lt 0) { throw 'Streamlink ended before producing media.' }
-            $message = [Text.Encoding]::UTF8.GetBytes("$([DateTime]::Now.ToString('o')) Buffering $bufferSeconds seconds before publication.`n")
-            $sinkLog.Write($message, 0, $message.Length)
-            Start-Sleep -Seconds $bufferSeconds
             $message = [Text.Encoding]::UTF8.GetBytes("$([DateTime]::Now.ToString('o')) Publishing at 1x speed.`n")
             $sinkLog.Write($message, 0, $message.Length)
+            [Console]::Out.Write([Text.Encoding]::UTF8.GetString($message))
             $null = $sink.Start()
-            $sinkErrors = $sink.StandardError.BaseStream.CopyToAsync($sinkLog)
+            $sinkErrors = [RestreamLogTee]::CopyAsync($sink.StandardError.BaseStream, $sinkLog, $consoleError)
             $sink.StandardInput.BaseStream.WriteByte([byte]$firstByte)
             # Flush the saved header byte before the asynchronous bulk copy.
             $sink.StandardInput.BaseStream.Flush()
@@ -84,7 +111,10 @@ function restream {
             }
             $sourceLog.Dispose()
             $sinkLog.Dispose()
-            if ($publisherError) { Add-Content $logFile $publisherError }
+            if ($publisherError) {
+                Add-Content $logFile $publisherError
+                [Console]::Error.WriteLine($publisherError)
+            }
         }
     }
 
@@ -98,6 +128,10 @@ function restream {
         # www.youtube.com/@venruki/live -> youtube-venruki
         $streamHost = $u.Host -replace '^(www|live)\.', ''
         $site = ($streamHost -split '\.')[0]
+        # Load the shared HLS offset only for YouTube and Twitch.
+        $offsetConfig = if ($u.Host -match '(^|\.)(youtube\.com|youtu\.be|twitch\.tv)$') {
+            Join-Path (Split-Path $streamlinkConfig) 'config-rtsp-delayed'
+        } else { $null }
 
         $room = ($u.AbsolutePath.Trim('/') -split '/')[-1]
         if ($site -eq 'youtube' -and $u.AbsolutePath -match '^/(?:@([^/]+)|(?:channel|c|user)/([^/]+))/live/?$') {
@@ -139,7 +173,7 @@ function restream {
         }
 
         if (-not $publisherRunning) {
-            $arguments = @($streamUrl, $Quality, $streamlinkConfig, $bufferSeconds, $site, $rtspUrl, $logFile, $streamlinkLog) | ForEach-Object {
+            $arguments = @($streamUrl, $Quality, $streamlinkConfig, $offsetConfig, $site, $rtspUrl, $logFile, $streamlinkLog) | ForEach-Object {
                 "'" + "$($_)".Replace("'", "''") + "'"
             }
             $publisherCommand = "& { $publish } $($arguments -join ' ')"
@@ -150,7 +184,7 @@ function restream {
 
             $publisher = Start-Process pwsh `
                 -ArgumentList "-NoProfile", "-EncodedCommand", $encoded `
-                -WindowStyle Hidden `
+                -NoNewWindow `
                 -PassThru
 
             Set-Content $pidFile $publisher.Id
@@ -159,8 +193,8 @@ function restream {
 
         # A fixed delay can open MPV before MediaMTX has a stream to serve.
         $ready = $false
-        Write-Host "Waiting for publisher (shared buffer: $bufferSeconds seconds)..."
-        $deadline = [DateTime]::UtcNow.AddSeconds($bufferSeconds + 45)
+        Write-Host 'Waiting for publisher...'
+        $deadline = [DateTime]::UtcNow.AddSeconds(45)
         do {
             if (-not (Get-Process -Id (Get-Content $pidFile) -ErrorAction SilentlyContinue)) {
                 Write-Error "Publisher exited for $streamUrl. See $logFile and $streamlinkLog."

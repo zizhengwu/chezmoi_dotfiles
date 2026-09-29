@@ -1,0 +1,3 @@
+# Loaded after config-rtsp only for YouTube and Twitch.
+# Live HLS rewind, limited by available segments; no extra publisher/player wait.
+hls-start-offset=30
