@@ -77,7 +77,8 @@ public static class RestreamLogTee
                 $source.StartInfo.ArgumentList.Add('--config')
                 $source.StartInfo.ArgumentList.Add($offsetConfig)
             }
-            $codecArguments = if ($site -eq 'youtube') { @('-c:v', 'copy', '-c:a', 'aac', '-b:a', '160k', '-flags:a', '+global_header') } else { @('-c', 'copy') }
+            # Twitch's MPEG-TS AAC lacks the global headers required by RTSP, too.
+            $codecArguments = if ($site -in @('youtube', 'twitch')) { @('-c:v', 'copy', '-c:a', 'aac', '-b:a', '160k', '-flags:a', '+global_header') } else { @('-c', 'copy') }
             foreach ($argument in (@('-nostdin', '-hide_banner', '-loglevel', 'warning', '-readrate', '1', '-readrate_initial_burst', '0', '-readrate_catchup', '1', '-i', 'pipe:0', '-map', '0:v:0', '-map', '0:a:0') + $codecArguments + @('-rtsp_transport', 'tcp', '-f', 'rtsp', $rtspUrl))) {
                 $sink.StartInfo.ArgumentList.Add($argument)
             }
