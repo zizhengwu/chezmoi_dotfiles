@@ -23,123 +23,6 @@ function restream {
         Start-Sleep -Milliseconds 700
     }
 
-    # Runs in a background PowerShell process sharing the console; keep media as bytes.
-    $publish = {
-        param($streamUrl, $quality, $streamlinkConfig, $offsetConfig, $site, $rtspUrl, $logFile)
-        $ErrorActionPreference = 'Stop'
-        # Use .NET tasks: PowerShell callbacks on IO threads have no runspace.
-        Add-Type -TypeDefinition @'
-using System;
-using System.IO;
-using System.Text;
-using System.Threading.Tasks;
-
-public sealed class RestreamLogTee
-{
-    private readonly object gate = new object();
-    private readonly Stream log;
-    private Stream console;
-
-    public RestreamLogTee(Stream log, Stream console)
-    {
-        this.log = log;
-        this.console = console;
-    }
-
-    public void WriteLine(string source, string message)
-    {
-        lock (gate)
-        {
-            var bytes = Encoding.UTF8.GetBytes($"{DateTime.Now:o} [{source}] {message}\n");
-            log.Write(bytes, 0, bytes.Length);
-            log.Flush();
-            if (console == null) return;
-            try
-            {
-                console.Write(bytes, 0, bytes.Length);
-                console.Flush();
-            }
-            catch (IOException) { console = null; }
-            catch (ObjectDisposedException) { console = null; }
-        }
-    }
-
-    public async Task CopyAsync(Stream input, string source)
-    {
-        using (var reader = new StreamReader(input, Encoding.UTF8, true, 4096, leaveOpen: true))
-        {
-            string line;
-            while ((line = await reader.ReadLineAsync()) != null)
-                WriteLine(source, line);
-        }
-    }
-}
-'@
-        $consoleError = [Console]::OpenStandardError()
-        $source = [Diagnostics.Process]::new()
-        $sink = [Diagnostics.Process]::new()
-        $sinkLog = [IO.FileStream]::new($logFile, 'Append', 'Write', 'ReadWrite', 1)
-        $logger = [RestreamLogTee]::new($sinkLog, $consoleError)
-        try {
-            $source.StartInfo.FileName = (Get-Command streamlink -CommandType Application).Source
-            $sink.StartInfo.FileName = (Get-Command ffmpeg -CommandType Application).Source
-            foreach ($process in @($source, $sink)) {
-                $process.StartInfo.UseShellExecute = $false
-                $process.StartInfo.CreateNoWindow = $true
-                $process.StartInfo.RedirectStandardError = $true
-            }
-            $source.StartInfo.RedirectStandardOutput = $true
-            $sink.StartInfo.RedirectStandardInput = $true
-            foreach ($argument in @($streamUrl, $quality, '--config', $streamlinkConfig, '--stdout')) {
-                $source.StartInfo.ArgumentList.Add($argument)
-            }
-            if ($offsetConfig) {
-                $source.StartInfo.ArgumentList.Add('--config')
-                $source.StartInfo.ArgumentList.Add($offsetConfig)
-            }
-            # Twitch's MPEG-TS AAC lacks the global headers required by RTSP, too.
-            $codecArguments = if ($site -in @('youtube', 'twitch')) { @('-c:v', 'copy', '-c:a', 'aac', '-b:a', '160k', '-flags:a', '+global_header') } else { @('-c', 'copy') }
-            foreach ($argument in (@('-nostdin', '-hide_banner', '-loglevel', 'warning', '-readrate', '1', '-readrate_initial_burst', '0', '-readrate_catchup', '1', '-i', 'pipe:0', '-map', '0:v:0', '-map', '0:a:0') + $codecArguments + @('-rtsp_transport', 'tcp', '-f', 'rtsp', $rtspUrl))) {
-                $sink.StartInfo.ArgumentList.Add($argument)
-            }
-            $null = $source.Start()
-            $sourceErrors = $logger.CopyAsync($source.StandardError.BaseStream, 'streamlink')
-            # Publish as soon as media arrives; Streamlink owns the HLS offset.
-            $firstByte = $source.StandardOutput.BaseStream.ReadByte()
-            if ($firstByte -lt 0) { throw 'Streamlink ended before producing media.' }
-            $logger.WriteLine('restream', 'Publishing at 1x speed.')
-            $null = $sink.Start()
-            $sinkErrors = $logger.CopyAsync($sink.StandardError.BaseStream, 'ffmpeg')
-            $sink.StandardInput.BaseStream.WriteByte([byte]$firstByte)
-            # Flush the saved header byte before the asynchronous bulk copy.
-            $sink.StandardInput.BaseStream.Flush()
-            $null = $source.StandardOutput.BaseStream.CopyToAsync($sink.StandardInput.BaseStream).GetAwaiter().GetResult()
-            $sink.StandardInput.Close()
-            $source.WaitForExit()
-            $sink.WaitForExit()
-        } catch {
-            $publisherError = $_ | Out-String
-        } finally {
-            foreach ($process in @($source, $sink)) {
-                try {
-                    if (-not $process.HasExited) { $process.Kill($true); $process.WaitForExit() }
-                } catch {}
-            }
-            foreach ($task in @($sourceErrors, $sinkErrors)) {
-                if ($task) { try { $task.GetAwaiter().GetResult() } catch {} }
-            }
-            try {
-                if ($publisherError) {
-                    foreach ($line in ($publisherError -split '\r?\n')) {
-                        $logger.WriteLine('restream', $line)
-                    }
-                }
-            } finally {
-                $sinkLog.Dispose()
-            }
-        }
-    }
-
     foreach ($streamUrl in $Url) {
         if ($streamUrl -notmatch '^https?://') { $streamUrl = "https://$streamUrl" }
         $u = [Uri]$streamUrl
@@ -197,7 +80,8 @@ public sealed class RestreamLogTee
             $arguments = @($streamUrl, $Quality, $streamlinkConfig, $offsetConfig, $site, $rtspUrl, $logFile) | ForEach-Object {
                 "'" + "$($_)".Replace("'", "''") + "'"
             }
-            $publisherCommand = "& { $publish } $($arguments -join ' ')"
+            $publisherScript = (Join-Path $PSScriptRoot 'RestreamPublisher.ps1').Replace("'", "''")
+            $publisherCommand = "& '$publisherScript' $($arguments -join ' ')"
 
             $encoded = [Convert]::ToBase64String(
                 [Text.Encoding]::Unicode.GetBytes($publisherCommand)
