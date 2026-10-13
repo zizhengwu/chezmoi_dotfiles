@@ -1,5 +1,6 @@
 # Background Streamlink-to-FFmpeg publisher; media stays in a binary pipe.
-param($streamUrl, $quality, $streamlinkConfig, $offsetConfig, $site, $rtspUrl, $logFile)
+param($streamUrl, $quality, $streamlinkConfig, $site, $rtspUrl, $logFile,
+    [ValidateRange(0, 300)][int]$BufferSeconds = 30)
 $ErrorActionPreference = 'Stop'
 # Use .NET tasks: PowerShell callbacks on IO threads have no runspace.
 Add-Type -Path (Join-Path $PSScriptRoot 'RestreamLogTee.cs')
@@ -21,10 +22,6 @@ try {
     foreach ($argument in @($streamUrl, $quality, '--config', $streamlinkConfig, '--stdout')) {
         $source.StartInfo.ArgumentList.Add($argument)
     }
-    if ($offsetConfig) {
-        $source.StartInfo.ArgumentList.Add('--config')
-        $source.StartInfo.ArgumentList.Add($offsetConfig)
-    }
     # Twitch's MPEG-TS AAC lacks the global headers required by RTSP, too.
     $codecArguments = if ($site -in @('youtube', 'twitch')) { @('-c:v', 'copy', '-c:a', 'aac', '-b:a', '160k', '-flags:a', '+global_header') } else { @('-c', 'copy') }
     foreach ($argument in (@('-nostdin', '-hide_banner', '-loglevel', 'warning', '-readrate', '1', '-readrate_initial_burst', '0', '-readrate_catchup', '1', '-i', 'pipe:0', '-map', '0:v:0', '-map', '0:a:0') + $codecArguments + @('-rtsp_transport', 'tcp', '-f', 'rtsp', $rtspUrl))) {
@@ -32,9 +29,18 @@ try {
     }
     $null = $source.Start()
     $sourceErrors = $logger.CopyAsync($source.StandardError.BaseStream, 'streamlink')
-    # Publish as soon as media arrives; Streamlink owns the HLS offset.
+    # Wait for actual media before starting the buffering clock.
     $firstByte = $source.StandardOutput.BaseStream.ReadByte()
     if ($firstByte -lt 0) { throw 'Streamlink ended before producing media.' }
+    # Leave stdout unread so Streamlink downloads ahead into its own ring buffer.
+    # This is a startup hold, not a measurement of buffered media duration.
+    if ($BufferSeconds -gt 0) {
+        $logger.WriteLine('restream', "Buffering in Streamlink for $BufferSeconds seconds...")
+        for ($second = 0; $second -lt $BufferSeconds; $second++) {
+            if ($source.HasExited) { throw 'Streamlink exited during startup buffering.' }
+            Start-Sleep -Seconds 1
+        }
+    }
     $logger.WriteLine('restream', 'Publishing at 1x speed.')
     $null = $sink.Start()
     $sinkErrors = $logger.CopyAsync($sink.StandardError.BaseStream, 'ffmpeg')

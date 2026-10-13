@@ -6,6 +6,10 @@ function restream {
 
         [string]$Quality = "best",
 
+        # Startup hold for YouTube and Twitch only.
+        [ValidateRange(0, 300)]
+        [int]$BufferSeconds = 30,
+
         [switch]$Restart
     )
 
@@ -26,6 +30,9 @@ function restream {
     foreach ($streamUrl in $Url) {
         if ($streamUrl -notmatch '^https?://') { $streamUrl = "https://$streamUrl" }
         $u = [Uri]$streamUrl
+        $startupBufferSeconds = if ($u.Host -match '(^|\.)(youtube\.com|youtu\.be|twitch\.tv)$') {
+            $BufferSeconds
+        } else { 0 }
 
         # Generate a readable unique MediaMTX path.
         # www.huya.com/dota2sdn       -> huya-dota2sdn
@@ -33,11 +40,6 @@ function restream {
         # www.youtube.com/@venruki/live -> youtube-venruki
         $streamHost = $u.Host -replace '^(www|live)\.', ''
         $site = ($streamHost -split '\.')[0]
-        # Load the shared HLS offset only for YouTube and Twitch.
-        $offsetConfig = if ($u.Host -match '(^|\.)(youtube\.com|youtu\.be|twitch\.tv)$') {
-            Join-Path (Split-Path $streamlinkConfig) 'config-rtsp-delayed'
-        } else { $null }
-
         $room = ($u.AbsolutePath.Trim('/') -split '/')[-1]
         if ($site -eq 'youtube' -and $u.AbsolutePath -match '^/(?:@([^/]+)|(?:channel|c|user)/([^/]+))/live/?$') {
             $room = if ($Matches[1]) { $Matches[1] } else { $Matches[2] }
@@ -77,7 +79,7 @@ function restream {
         }
 
         if (-not $publisherRunning) {
-            $arguments = @($streamUrl, $Quality, $streamlinkConfig, $offsetConfig, $site, $rtspUrl, $logFile) | ForEach-Object {
+            $arguments = @($streamUrl, $Quality, $streamlinkConfig, $site, $rtspUrl, $logFile, $startupBufferSeconds) | ForEach-Object {
                 "'" + "$($_)".Replace("'", "''") + "'"
             }
             $publisherScript = (Join-Path $PSScriptRoot 'RestreamPublisher.ps1').Replace("'", "''")
@@ -99,7 +101,8 @@ function restream {
         # A fixed delay can open MPV before MediaMTX has a stream to serve.
         $ready = $false
         Write-Host 'Waiting for publisher...'
-        $deadline = [DateTime]::UtcNow.AddSeconds(45)
+        # Allow source discovery/probing time in addition to the startup hold.
+        $deadline = [DateTime]::UtcNow.AddSeconds(45 + $startupBufferSeconds)
         do {
             if (-not (Get-Process -Id (Get-Content $pidFile) -ErrorAction SilentlyContinue)) {
                 Write-Error "Publisher exited for $streamUrl. See $logFile."

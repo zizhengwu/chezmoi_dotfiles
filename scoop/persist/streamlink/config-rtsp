@@ -2,7 +2,7 @@
 # No player/player-args: every viewer chooses its own player.
 http-proxy=socks5h://127.0.0.1:7891
 http-ignore-env
-# No added rewind by default. YouTube/Twitch load config-rtsp-delayed after this.
+# The publisher supplies the startup hold; do not stack an extra HLS rewind.
 hls-start-offset=0
 retry-streams=5
 retry-max=60
@@ -14,6 +14,6 @@ hls-playlist-reload-attempts=60
 stream-timeout=300
 stream-segmented-queue-deadline=0
 http-timeout=10
-# Buffer capacity only; this does not impose a startup delay.
-# Holds downloads ahead of FFmpeg's 1x consumption.
+# Streamlink owns the shared reserve for all viewers. The publisher waits
+# before reading, then FFmpeg consumes at 1x. Capacity is a limit, not a target.
 ringbuffer-size=128M
