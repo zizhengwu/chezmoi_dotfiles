@@ -6,7 +6,7 @@ function restream {
 
         [string]$Quality = "best",
 
-        # Startup hold for YouTube and Twitch only.
+        # Startup/refill hold for YouTube and Twitch only; 0 disables both.
         [ValidateRange(0, 300)]
         [int]$BufferSeconds = 30,
 
@@ -120,7 +120,8 @@ function restream {
         }
 
         # MPV is also independent, so the PowerShell prompt returns immediately.
-        Start-Process mpv.exe -ArgumentList '--rtsp-transport=tcp', $rtspUrl
+        # Reload if a long refill or publisher restart closes the RTSP session.
+        Start-Process mpv.exe -ArgumentList '--rtsp-transport=tcp', '--loop-playlist=force', $rtspUrl
 
         Write-Host "Stream: $path"
         Write-Host "RTSP:   rtsp://127.0.0.1:8554/$path"
