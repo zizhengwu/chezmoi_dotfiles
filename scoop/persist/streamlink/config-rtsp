@@ -1,5 +1,7 @@
 # Shared source settings for restream -> FFmpeg -> MediaMTX.
 # No player/player-args: every viewer chooses its own player.
+# Show status, warnings, and failure reasons without per-segment diagnostics.
+loglevel=info
 http-proxy=socks5h://127.0.0.1:7891
 http-ignore-env
 # The publisher supplies the startup hold; do not stack an extra HLS rewind.
