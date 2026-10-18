@@ -1,3 +1,29 @@
+# MediaMTX supplies offline media while a publisher stalls or restarts, so
+# viewers do not need a player-specific reconnect loop.
+function Set-RestreamServerConfig {
+    param([string]$Config, [string]$Name)
+    if ($Name -notmatch '^(youtube|twitch)-[a-zA-Z0-9_-]+$') { return }
+    $content = [IO.File]::ReadAllText($Config)
+    $updated = if ($content -match '(?m)^readTimeout:') {
+        $content -replace '(?m)^readTimeout:[^\r\n]*', 'readTimeout: 10s'
+    } else { "readTimeout: 10s`n$content" }
+    if ($updated -notmatch ('(?m)^  ' + [regex]::Escape($Name) + ':')) {
+        $paths = @"
+paths:
+  ${Name}:
+    alwaysAvailable: true
+    alwaysAvailableTracks:
+      - codec: H264
+      - codec: MPEG4Audio
+        sampleRate: 48000
+        channelCount: 2
+"@
+        if ($updated -notmatch '(?m)^paths:\s*$') { throw 'MediaMTX config has no paths section.' }
+        $updated = $updated -replace '(?m)^paths:[^\r\n]*', $paths
+    }
+    if ($updated -cne $content) { [IO.File]::WriteAllText($Config, $updated) }
+}
+
 # Return only a publisher whose decoded invocation belongs to this wrapper.
 function Get-RestreamPublisher {
     param([string]$Name)
@@ -162,6 +188,7 @@ function restream {
         }
 
         $path = ("$site-$room" -replace '[^A-Za-z0-9_-]', '-').ToLowerInvariant()
+        Set-RestreamServerConfig $config $path
 
         $pidFile = Join-Path $env:TEMP "restream-$path.pid"
         $logFile = Join-Path $env:TEMP "restream-$path.log"
@@ -222,8 +249,7 @@ function restream {
         }
 
         # MPV is also independent, so the PowerShell prompt returns immediately.
-        # Reload if a long refill or publisher restart closes the RTSP session.
-        Start-Process mpv.exe -ArgumentList '--rtsp-transport=tcp', '--loop-playlist=force', $rtspUrl
+        Start-Process mpv.exe -ArgumentList '--rtsp-transport=tcp', $rtspUrl
 
         Write-Host "Stream: $path"
         Write-Host "RTSP:   rtsp://127.0.0.1:8554/$path"

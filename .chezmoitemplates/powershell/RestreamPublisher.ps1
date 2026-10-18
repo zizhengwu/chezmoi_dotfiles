@@ -24,7 +24,9 @@ try {
         $sourceInfo.ArgumentList.Add($argument)
     }
     # Twitch's MPEG-TS AAC lacks the global headers required by RTSP, too.
-    $codecArguments = if ($site -in @('youtube', 'twitch')) { @('-c:v', 'copy', '-c:a', 'aac', '-b:a', '160k', '-flags:a', '+global_header') } else { @('-c', 'copy') }
+    # Match MediaMTX's offline AAC track so reconnecting sources retain the
+    # same audio format, including YouTube's commonly used 44100 Hz input.
+    $codecArguments = if ($site -in @('youtube', 'twitch')) { @('-c:v', 'copy', '-c:a', 'aac', '-ar', '48000', '-ac', '2', '-b:a', '160k', '-flags:a', '+global_header') } else { @('-c', 'copy') }
     # FFmpeg 8.1 can repeatedly reset its per-track pacing after a long stall
     # with catchup exactly 1, yielding slow playback. Allow bounded 5% catchup.
     foreach ($argument in (@('-nostdin', '-hide_banner', '-loglevel', 'warning', '-readrate', '1', '-readrate_initial_burst', '0', '-readrate_catchup', '1.05', '-i', 'pipe:0', '-map', '0:v:0', '-map', '0:a:0') + $codecArguments + @('-rtsp_transport', 'tcp', '-f', 'rtsp', $rtspUrl))) {
