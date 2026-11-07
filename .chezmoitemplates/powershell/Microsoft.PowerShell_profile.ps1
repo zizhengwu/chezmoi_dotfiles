@@ -1,4 +1,4 @@
-oh-my-posh init pwsh --config "$env:POSH_THEMES_PATH/probua.minimal.omp.json" | Invoke-Expression
+Invoke-Expression (&starship init powershell)
 Import-Module PSReadLine
 Set-PSReadLineOption -EditMode Emacs
 Set-PSReadLineKeyHandler -Key Ctrl+Shift+v -Function Paste
