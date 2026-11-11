@@ -6,6 +6,13 @@ Set-PSReadLineKeyHandler -Key Ctrl+w -Function BackwardKillWord
 Set-PSReadlineKeyHandler -Key Tab -Function MenuComplete
 Set-PSReadLineKeyHandler -Chord Ctrl+/ -Function Undo -ErrorAction Stop
 Set-PSReadLineKeyHandler -Chord 'Ctrl+?' -Function Redo -ErrorAction Stop
+Set-PSReadLineKeyHandler -Chord 'Ctrl+x,Ctrl+z' -ScriptBlock {
+    $dir = zoxide query -i
+    if ($LASTEXITCODE -eq 0 -and $dir) {
+        $quoted = "'" + $dir.Replace("'", "''") + "'"
+        [Microsoft.PowerShell.PSConsoleReadLine]::Insert($quoted)
+    }
+}
 atuin init powershell --disable-up-arrow | Out-String | Invoke-Expression
 # zsh-ish: HIST_FIND_NO_DUPS
 Set-PSReadLineOption -HistoryNoDuplicates
